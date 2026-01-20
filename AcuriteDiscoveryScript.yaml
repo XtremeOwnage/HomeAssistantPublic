@@ -1,0 +1,279 @@
+blueprint:
+  name: rtl_433 Acurite Sensor MQTT Discovery
+  description: >
+    Publish or remove MQTT discovery entities for Acurite sensors
+    
+    Supports: 606TX, 592TX, 06002M, Acurite-986, Acurite-Tower
+    
+    
+    Author: XtremeOwnage
+    
+    Website: https://static.xtremeownage.com/blog
+    
+    Discord: https://static.xtremeownage.com/discord
+  domain: script
+  author: XtremeOwnage
+  homeassistant:
+    min_version: 2024.1.0
+  source_url: https://static.xtremeownage.com/blog/acurite-discovery
+
+fields:
+  model:
+    description: Acurite sensor model
+    required: true
+    default: "Acurite-Tower"
+    selector:
+      select:
+        options:
+          - label: "Acurite Tower (06002M/592TX)"
+            value: "Acurite-Tower"
+          - label: "Acurite 06002M"
+            value: "06002M"
+          - label: "Acurite 592TX"
+            value: "592TX"
+          - label: "Acurite 606TX"
+            value: "Acurite-606TX"
+          - label: "Acurite 986"
+            value: "Acurite-986"
+    name: Model
+  device_id:
+    description: "Acurite device ID (example: 326)"
+    example: "326"
+    required: true
+    selector:
+      text:
+    name: Device ID
+  action:
+    description: Action to perform
+    example: create
+    required: true
+    default: create
+    selector:
+      select:
+        options:
+          - create
+          - remove
+    name: Action
+  sensor_name:
+    description: Friendly name for the sensor location
+    example: "Bedroom"
+    required: false
+    default: "My Sensor"
+    selector:
+      text:
+    name: Sensor Name
+  base_path:
+    description: Base MQTT path for rtl_433 (where rtl_433 publishes)
+    example: "rtl_433"
+    required: false
+    default: "rtl_433"
+    selector:
+      text:
+    name: Base Path
+
+mode: queued
+
+sequence:
+  - variables:
+      id: "{{ device_id }}"
+      name: "{{ sensor_name | default('Acurite ' ~ device_id) }}"
+      model_name: "{{ model }}"
+      base_topic: "{{ base_path }}/{{ model_name }}/{{ device_id }}"
+      discovery_prefix: homeassistant
+      device_block:
+        identifiers:
+          - acurite_{{ model_name | replace('-', '_') | lower }}_{{ id }}
+        manufacturer: Acurite
+        model: "{{ model_name }}"
+        name: "{{ name }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ action == 'create' }}"
+        sequence:
+          # Temperature sensor - all models
+          - service: mqtt.publish
+            data:
+              retain: true
+              topic: >-
+                {{ discovery_prefix }}/sensor/acurite_{{ model_name | replace('-', '_') | lower }}_{{ id }}/temperature/config
+              payload: >-
+                {{
+                  {
+                    "name": name ~ " Temperature",
+                    "unique_id": "acurite_" ~ (model_name | replace('-', '_') | lower) ~ "_" ~ id ~ "_temp",
+                    "state_topic": base_topic,
+                    "json_attributes_topic": base_topic,
+                    "value_template": "{% if 'temperature_C' in value_json %}{{ value_json.temperature_C | float | round(1) }}{% else %}{{ ((value_json.temperature_F - 32) * 5/9) | round(1) }}{% endif %}",
+                    "device_class": "temperature",
+                    "unit_of_measurement": "°C",
+                    "state_class": "measurement",
+                    "expire_after": 600,
+                    "device": device_block
+                  } | tojson
+                }}
+          
+          # Humidity sensor - Tower/06002M/592TX only
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ model_name in ['Acurite-Tower', '06002M', '592TX'] }}"
+                sequence:
+                  - service: mqtt.publish
+                    data:
+                      retain: true
+                      topic: >-
+                        {{ discovery_prefix }}/sensor/acurite_{{ model_name | replace('-', '_') | lower }}_{{ id }}/humidity/config
+                      payload: >-
+                        {{
+                          {
+                            "name": name ~ " Humidity",
+                            "unique_id": "acurite_" ~ (model_name | replace('-', '_') | lower) ~ "_" ~ id ~ "_humidity",
+                            "state_topic": base_topic,
+                            "json_attributes_topic": base_topic,
+                            "value_template": "{{ value_json.humidity | int }}",
+                            "device_class": "humidity",
+                            "unit_of_measurement": "%",
+                            "state_class": "measurement",
+                            "expire_after": 600,
+                            "device": device_block
+                          } | tojson
+                        }}
+          
+          # Battery sensor - all models
+          - service: mqtt.publish
+            data:
+              retain: true
+              topic: >-
+                {{ discovery_prefix }}/binary_sensor/acurite_{{ model_name | replace('-', '_') | lower }}_{{ id }}/battery/config
+              payload: >-
+                {{
+                  {
+                    "name": name ~ " Battery Low",
+                    "unique_id": "acurite_" ~ (model_name | replace('-', '_') | lower) ~ "_" ~ id ~ "_battery",
+                    "state_topic": base_topic,
+                    "json_attributes_topic": base_topic,
+                    "value_template": "{{ 'OFF' if value_json.battery_ok == 1 else 'ON' }}",
+                    "payload_on": "ON",
+                    "payload_off": "OFF",
+                    "device_class": "battery",
+                    "expire_after": 600,
+                    "device": device_block
+                  } | tojson
+                }}
+          
+          # Channel sensor - all models
+          - service: mqtt.publish
+            data:
+              retain: true
+              topic: >-
+                {{ discovery_prefix }}/sensor/acurite_{{ model_name | replace('-', '_') | lower }}_{{ id }}/channel/config
+              payload: >-
+                {{
+                  {
+                    "name": name ~ " Channel",
+                    "unique_id": "acurite_" ~ (model_name | replace('-', '_') | lower) ~ "_" ~ id ~ "_channel",
+                    "state_topic": base_topic,
+                    "json_attributes_topic": base_topic,
+                    "value_template": "{{ value_json.channel }}",
+                    "icon": "mdi:radio-tower",
+                    "entity_category": "diagnostic",
+                    "expire_after": 600,
+                    "device": device_block
+                  } | tojson
+                }}
+          
+          # Button sensor - 606TX only
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ model_name == 'Acurite-606TX' }}"
+                sequence:
+                  - service: mqtt.publish
+                    data:
+                      retain: true
+                      topic: >-
+                        {{ discovery_prefix }}/binary_sensor/acurite_{{ model_name | replace('-', '_') | lower }}_{{ id }}/button/config
+                      payload: >-
+                        {{
+                          {
+                            "name": name ~ " Button",
+                            "unique_id": "acurite_" ~ (model_name | replace('-', '_') | lower) ~ "_" ~ id ~ "_button",
+                            "state_topic": base_topic,
+                            "json_attributes_topic": base_topic,
+                            "value_template": "{{ 'ON' if value_json.button == 1 else 'OFF' }}",
+                            "payload_on": "ON",
+                            "payload_off": "OFF",
+                            "icon": "mdi:gesture-tap-button",
+                            "entity_category": "diagnostic",
+                            "expire_after": 600,
+                            "device": device_block
+                          } | tojson
+                        }}
+          
+          # Status sensor - 986 only
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ model_name == 'Acurite-986' }}"
+                sequence:
+                  - service: mqtt.publish
+                    data:
+                      retain: true
+                      topic: >-
+                        {{ discovery_prefix }}/sensor/acurite_{{ model_name | replace('-', '_') | lower }}_{{ id }}/status/config
+                      payload: >-
+                        {{
+                          {
+                            "name": name ~ " Status",
+                            "unique_id": "acurite_" ~ (model_name | replace('-', '_') | lower) ~ "_" ~ id ~ "_status",
+                            "state_topic": base_topic,
+                            "json_attributes_topic": base_topic,
+                            "value_template": "{{ value_json.status }}",
+                            "icon": "mdi:information-outline",
+                            "entity_category": "diagnostic",
+                            "expire_after": 600,
+                            "device": device_block
+                          } | tojson
+                        }}
+      
+      - conditions:
+          - condition: template
+            value_template: "{{ action == 'remove' }}"
+        sequence:
+          - service: mqtt.publish
+            data:
+              retain: true
+              topic: >-
+                {{ discovery_prefix }}/sensor/acurite_{{ model_name | replace('-', '_') | lower }}_{{ id }}/temperature/config
+              payload: ""
+          - service: mqtt.publish
+            data:
+              retain: true
+              topic: >-
+                {{ discovery_prefix }}/sensor/acurite_{{ model_name | replace('-', '_') | lower }}_{{ id }}/humidity/config
+              payload: ""
+          - service: mqtt.publish
+            data:
+              retain: true
+              topic: >-
+                {{ discovery_prefix }}/binary_sensor/acurite_{{ model_name | replace('-', '_') | lower }}_{{ id }}/battery/config
+              payload: ""
+          - service: mqtt.publish
+            data:
+              retain: true
+              topic: >-
+                {{ discovery_prefix }}/sensor/acurite_{{ model_name | replace('-', '_') | lower }}_{{ id }}/channel/config
+              payload: ""
+          - service: mqtt.publish
+            data:
+              retain: true
+              topic: >-
+                {{ discovery_prefix }}/binary_sensor/acurite_{{ model_name | replace('-', '_') | lower }}_{{ id }}/button/config
+              payload: ""
+          - service: mqtt.publish
+            data:
+              retain: true
+              topic: >-
+                {{ discovery_prefix }}/sensor/acurite_{{ model_name | replace('-', '_') | lower }}_{{ id }}/status/config
+              payload: ""
