@@ -109,6 +109,7 @@ sequence:
                     "unit_of_measurement": "°C",
                     "state_class": "measurement",
                     "expire_after": 600,
+                    "tag": ["acurite:temp"],
                     "device": device_block
                   } | tojson
                 }}
@@ -136,6 +137,7 @@ sequence:
                             "unit_of_measurement": "%",
                             "state_class": "measurement",
                             "expire_after": 600,
+                            "tag": ["acurite:humidity"],
                             "device": device_block
                           } | tojson
                         }}
@@ -158,6 +160,7 @@ sequence:
                     "payload_off": "OFF",
                     "device_class": "battery",
                     "expire_after": 600,
+                    "tag": ["acurite:battery-status"],
                     "device": device_block
                   } | tojson
                 }}
