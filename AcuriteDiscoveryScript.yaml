@@ -2,10 +2,9 @@ blueprint:
   name: rtl_433 Acurite Sensor MQTT Discovery
   description: >
     Publish or remove MQTT discovery entities for Acurite sensors
-    
-    Supports: 606TX, 592TX, 06002M, Acurite-986, Acurite-Tower
-    
-    
+
+    Supports: 606TX, 592TX, 06002M, Acurite-986, Acurite-Tower, Acurite-515
+
     Author: XtremeOwnage
     
     Website: https://static.xtremeownage.com/blog
@@ -35,6 +34,8 @@ fields:
             value: "Acurite-606TX"
           - label: "Acurite 986"
             value: "Acurite-986"
+          - label: "Acurite 515"
+            value: "Acurite-515"
     name: Model
   device_id:
     description: "Acurite device ID (example: 326)"
@@ -153,7 +154,7 @@ sequence:
                     "unique_id": "acurite_" ~ (model_name | replace('-', '_') | lower) ~ "_" ~ id ~ "_battery",
                     "state_topic": base_topic,
                     "json_attributes_topic": base_topic,
-                    "value_template": "{{ 'OFF' if value_json.battery_ok == 1 else 'ON' }}",
+                    "value_template": "{{ 'OFF' if (value_json.battery_ok | int) == 1 else 'ON' }}",
                     "payload_on": "ON",
                     "payload_off": "OFF",
                     "device_class": "battery",
@@ -201,7 +202,7 @@ sequence:
                             "unique_id": "acurite_" ~ (model_name | replace('-', '_') | lower) ~ "_" ~ id ~ "_button",
                             "state_topic": base_topic,
                             "json_attributes_topic": base_topic,
-                            "value_template": "{{ 'ON' if value_json.button == 1 else 'OFF' }}",
+                            "value_template": "{{ 'ON' if (value_json.button | int) == 1 else 'OFF' }}",
                             "payload_on": "ON",
                             "payload_off": "OFF",
                             "icon": "mdi:gesture-tap-button",
