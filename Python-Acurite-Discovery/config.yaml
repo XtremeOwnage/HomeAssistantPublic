@@ -1,138 +1,135 @@
 # ============================================================
-# Acurite MQTT Discovery Publisher - Configuration
+# Acurite MQTT Discovery Publisher - Example Configuration
 # ============================================================
 # Copy this file to config.yaml and fill in your values.
 # Run: python publish-discovery.py
-# Remove all: python publish-discovery.py --remove
 # ============================================================
 
 
-# ------------------------------------------------------------
-# MQTT Broker Connection
-# ------------------------------------------------------------
+# --- MQTT Broker ---
 mqtt:
   broker: "192.168.1.100"           # Broker hostname or IP address
   port: 1883                        # 1883 = plain, 8883 = TLS
-
-  # Authentication (remove both lines if your broker has no auth)
-  username: "mqtt_user"
+  username: "mqtt_user"             # Remove both lines if no auth required
   password: "mqtt_pass"
-
   client_id: "acurite-discovery"    # Must be unique on your broker
 
   # TLS (uncomment if your broker uses TLS/SSL)
   # tls: true
   # ca_cert: "/etc/ssl/certs/ca-certificates.crt"
-  # certfile: "/path/to/client.crt"   # optional: mutual TLS
-  # keyfile:  "/path/to/client.key"   # optional: mutual TLS
+  # certfile: "/path/to/client.crt"   # Only needed for mutual TLS
+  # keyfile:  "/path/to/client.key"   # Only needed for mutual TLS
 
 
-# ------------------------------------------------------------
-# Discovery Settings
-# ------------------------------------------------------------
-discovery_prefix: "homeassistant"   # Must match HA's discovery prefix (default: homeassistant)
-base_path: "rtl_433"                # Root topic where rtl_433 publishes (default: rtl_433)
-                                    # Final state topic will be: <base_path>/<model>/<device_id>
+# --- Global Defaults ---
+discovery_prefix: "homeassistant"   # Must match HA's discovery prefix (rarely needs changing)
+base_path: "rtl_433"                # Root topic where rtl_433 publishes
+                                    # State topics will be: <base_path>/<model>/<device_id>
 
 
-# ------------------------------------------------------------
-# Sensors
-# ------------------------------------------------------------
-# Each entry represents one physical Acurite sensor.
+# --- Sensors ---
 #
-# Required fields:
-#   model      - Sensor model. One of:
-#                  Acurite-Tower   (temp + humidity)
-#                  06002M          (temp + humidity, alias for Acurite-Tower)
-#                  592TX           (temp + humidity, alias for Acurite-Tower)
-#                  Acurite-606TX   (temp only + button)
-#                  Acurite-986     (temp only + status, good for fridge/freezer)
-#   device_id  - The numeric ID rtl_433 reports for this sensor.
-#                Find it by watching: mosquitto_sub -h <broker> -t "rtl_433/#" -v
+# FIELD REFERENCE:
+#   id        (required) - Your stable, permanent identifier for this sensor.
+#                          NEVER change this after initial setup. It anchors
+#                          the HA device identity, unique_ids, and all
+#                          historical data across battery swaps and renames.
+#                          Use any short unique slug you like: "kitchen", "s01", etc.
 #
-# Optional fields:
-#   name       - Friendly label shown in Home Assistant (default: "Acurite <device_id>")
-#   base_path  - Override the global base_path for this sensor only
+#   device_id (required) - The numeric radio ID rtl_433 reports for this sensor.
+#                          This changes when you replace batteries — update it
+#                          here and re-run the script. Everything else is preserved.
 #
-# Entities created per model:
-#   Acurite-Tower / 06002M / 592TX:  Temperature, Humidity, Battery, Channel
-#   Acurite-606TX:                   Temperature, Battery, Channel, Button
-#   Acurite-986:                     Temperature, Battery, Channel, Status
+#   model     (required) - Sensor model. One of:
+#                            Acurite-Tower   (temp + humidity)
+#                            06002M          (temp + humidity, alias for Acurite-Tower)
+#                            592TX           (temp + humidity, alias for Acurite-Tower)
+#                            Acurite-606TX   (temp only + button)
+#                            Acurite-986     (temp only + status, ideal for fridge/freezer)
+#
+#   name      (optional) - Friendly label shown in Home Assistant.
+#                          Safe to change at any time — re-run script to apply.
+#                          Defaults to "Acurite <id>" if omitted.
+#
+#   area      (optional) - Home Assistant area to assign this device to.
+#                          The area is created automatically if it doesn't exist.
+#                          Must exactly match the area name in HA (case-sensitive).
+#                          Omit if you don't use areas, or want to assign manually.
+#                          Note: HA won't override a manually-assigned area — delete
+#                          the device in HA first if you need to force a move.
+#
+#   base_path (optional) - Override the global base_path for this sensor only.
+#                          Useful if one sensor publishes to a different topic root.
+#
+#
+# BATTERY SWAP WORKFLOW:
+#   1. Watch for the new ID:  mosquitto_sub -h <broker> -t "rtl_433/#" -v
+#   2. Update device_id below — leave id, name, area, model untouched
+#   3. Run: python publish-discovery.py
+#   Done. HA history, automations, and dashboards are all preserved.
+#
+#
+# ENTITIES CREATED PER MODEL:
+#   Acurite-Tower / 06002M / 592TX:  Temperature, Humidity, Battery Low, Channel
+#   Acurite-606TX:                   Temperature, Battery Low, Channel, Button
+#   Acurite-986:                     Temperature, Battery Low, Channel, Status
 
 sensors:
 
-  # ── Acurite-986 ─────────────────────────────────────────────
-  # Best for appliance monitoring. No humidity. Includes a status field.
+  # ── Acurite-986 examples ─────────────────────────────────────────────────────
+  # Good for appliance monitoring — compact, temp-only, long battery life.
 
-  - model: "Acurite-986"
-    device_id: 64930
+  - id: "fridge"
+    model: "Acurite-986"
+    device_id: 11111
     name: "Fridge"
+    area: "Kitchen"
 
-  - model: "Acurite-986"
-    device_id: 21418
+  - id: "freezer"
+    model: "Acurite-986"
+    device_id: 22222
     name: "Freezer"
-
-  - model: "Acurite-986"
-    device_id: 41227
-    name: "Deep Freezer"
-
-  - model: "Acurite-986"
-    device_id: 10709
-    name: "Attic"
+    area: "Kitchen"
 
 
-  # ── Acurite-Tower ───────────────────────────────────────────
-  # Indoor/outdoor temp + humidity sensor. Most common model.
+  # ── Acurite-Tower examples ───────────────────────────────────────────────────
+  # Indoor/outdoor temp + humidity. Most common model.
 
-  - model: "Acurite-Tower"
-    device_id: 10803
+  - id: "living_room"
+    model: "Acurite-Tower"
+    device_id: 33333
+    name: "Living Room"
+    area: "Living Room"
+
+  - id: "back_porch"
+    model: "Acurite-Tower"
+    device_id: 44444
+    name: "Back Porch"
+    area: "Back Porch"
+
+  # Sensor without an area — will appear unassigned in HA
+  - id: "unknown_sensor"
+    model: "Acurite-Tower"
+    device_id: 55555
     name: "Unknown"
 
-  - model: "Acurite-Tower"
-    device_id: 6731
-    name: "Back Porch"
 
-  - model: "Acurite-Tower"
-    device_id: 13514
-    name: "Family Room"
-
-  - model: "Acurite-Tower"
-    device_id: 2888
-    name: "Living Room"
-
-  - model: "Acurite-Tower"
-    device_id: 1537
-    name: "Master Bedroom"
-
-  - model: "Acurite-Tower"
-    device_id: 711
-    name: "Kitchen"
-
-  - model: "Acurite-Tower"
-    device_id: 326
-    name: "Garage"
-
-
-  # ── Acurite-606TX ───────────────────────────────────────────
+  # ── Acurite-606TX examples ───────────────────────────────────────────────────
   # Compact temp-only sensor. Includes a sync/reset button entity.
 
-  - model: "Acurite-606TX"
-    device_id: 101
-    name: "Kids Room"
-
-  - model: "Acurite-606TX"
-    device_id: 60
+  - id: "office"
+    model: "Acurite-606TX"
+    device_id: 66666
     name: "Office"
-
-  - model: "Acurite-606TX"
-    device_id: 64
-    name: "Pump Shed"
+    area: "Office"
 
 
-  # ── Per-sensor base_path override example ───────────────────
-  # Use this if a specific sensor publishes to a non-standard topic.
-  #
-  # - model: "Acurite-Tower"
-  #   device_id: 9999
+  # ── Per-sensor base_path override example ────────────────────────────────────
+  # Use if a specific node of rtl_433 publishes to a different topic root.
+
+  # - id: "shed"
+  #   model: "Acurite-Tower"
+  #   device_id: 77777
   #   name: "Shed"
+  #   area: "Shed"
   #   base_path: "rtl_433/node2"
